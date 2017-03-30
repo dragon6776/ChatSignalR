@@ -1,0 +1,5 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/packages/Microsoft.ApplicationInsights.Agent.Intercept.1.2.0/lib/net40/Microsoft.AI.Agent.Intercept.dll
