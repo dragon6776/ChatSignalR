@@ -1,6 +1,10 @@
 ﻿body {
 }
 
+.border{
+    display: block;
+}
+
 #container {  
   width: 400px ;  
   margin-left: auto ;  
@@ -12,8 +16,6 @@
   float: left;  
 }  
 #onlineusers {  
-  float: right;  
-  width: 100px;  
   background-color:#D4D4D4;  
 }  
 #chatarea {  
