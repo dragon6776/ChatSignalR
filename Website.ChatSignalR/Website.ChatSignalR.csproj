@@ -180,13 +180,9 @@
     <Compile Include="App_Start\BundleConfig.cs" />
     <Compile Include="App_Start\FilterConfig.cs" />
     <Compile Include="App_Start\RouteConfig.cs" />
-    <Compile Include="Migrations\201703310954532_F1.cs" />
-    <Compile Include="Migrations\201703310954532_F1.Designer.cs">
-      <DependentUpon>201703310954532_F1.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Migrations\201703311502298_F2.cs" />
-    <Compile Include="Migrations\201703311502298_F2.Designer.cs">
-      <DependentUpon>201703311502298_F2.cs</DependentUpon>
+    <Compile Include="Migrations\201704011434186_F1.cs" />
+    <Compile Include="Migrations\201704011434186_F1.Designer.cs">
+      <DependentUpon>201704011434186_F1.cs</DependentUpon>
     </Compile>
     <Compile Include="Models\AppConstants.cs" />
     <Compile Include="Controllers\ChatRoomController.cs" />
@@ -301,6 +297,7 @@
     <Content Include="Views\Customers\Edit.cshtml" />
     <Content Include="Views\Customers\Index.cshtml" />
     <Content Include="Views\ChatRoom\Index.cshtml" />
+    <Content Include="Views\ChatRoom\ChatFormBox.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="App_Data\" />
@@ -317,11 +314,8 @@
     <EmbeddedResource Include="Migrations\201703310756147_F.resx">
       <DependentUpon>201703310756147_F.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Migrations\201703310954532_F1.resx">
-      <DependentUpon>201703310954532_F1.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Migrations\201703311502298_F2.resx">
-      <DependentUpon>201703311502298_F2.cs</DependentUpon>
+    <EmbeddedResource Include="Migrations\201704011434186_F1.resx">
+      <DependentUpon>201704011434186_F1.cs</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <PropertyGroup>

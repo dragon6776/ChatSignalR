@@ -13,7 +13,7 @@ namespace Website.ChatSignalR.Migrations
         
         string IMigrationMetadata.Id
         {
-            get { return "201703310954532_F1"; }
+            get { return "201704011434186_F1"; }
         }
         
         string IMigrationMetadata.Source

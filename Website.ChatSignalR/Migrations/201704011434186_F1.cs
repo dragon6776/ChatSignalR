@@ -3,7 +3,7 @@ namespace Website.ChatSignalR.Migrations
     using System;
     using System.Data.Entity.Migrations;
     
-    public partial class F2 : DbMigration
+    public partial class F1 : DbMigration
     {
         public override void Up()
         {
@@ -29,11 +29,11 @@ namespace Website.ChatSignalR.Migrations
                         Content = c.String(),
                         DateCreated = c.DateTime(nullable: false),
                         Customer_Id = c.Long(),
-                        Conversation_Id = c.Int(),
+                        Conversation_Id = c.Int(nullable: false),
                     })
                 .PrimaryKey(t => t.Id)
                 .ForeignKey("dbo.Customers", t => t.Customer_Id)
-                .ForeignKey("dbo.Conversations", t => t.Conversation_Id)
+                .ForeignKey("dbo.Conversations", t => t.Conversation_Id, cascadeDelete: true)
                 .Index(t => t.Customer_Id)
                 .Index(t => t.Conversation_Id);
             
@@ -50,6 +50,7 @@ namespace Website.ChatSignalR.Migrations
                 .Index(t => t.Customer_Id)
                 .Index(t => t.Conversation_Id);
             
+            AddColumn("dbo.Connections", "ConnectionId", c => c.String());
         }
         
         public override void Down()
@@ -66,6 +67,7 @@ namespace Website.ChatSignalR.Migrations
             DropIndex("dbo.Messages", new[] { "Customer_Id" });
             DropIndex("dbo.Conversations", new[] { "LastMessage_Id" });
             DropIndex("dbo.Conversations", new[] { "FirstMessage_Id" });
+            DropColumn("dbo.Connections", "ConnectionId");
             DropTable("dbo.CustomerConversations");
             DropTable("dbo.Messages");
             DropTable("dbo.Conversations");

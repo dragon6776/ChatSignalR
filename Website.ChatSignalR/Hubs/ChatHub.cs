@@ -28,20 +28,30 @@ namespace Website.ChatSignalR.Hubs
         //    Clients.All.broadcastMessage(name, message);
         //}
 
-        public void SendToSpecific(string name, string message, long to)
+        public void SendToSpecific(string message, long toCustomerId)
         {
+            // get current customer by connection
+            var customer = GetCurrentCustomerByConnectionId(Context.ConnectionId);
+
             //string toConnectionId = dic[to];
-            string toConnectionId = GetActivedConnectionIdByCustomerId(to);
+            string toConnectionId = GetActivedConnectionIdByCustomerId(toCustomerId);
 
             // broadcast messae to caller
-            Clients.Caller.broadcastMessage(name, message);
+            Clients.Caller.broadcastMessage(customer.Id, customer.Name, message);
 
             // broadcast message to dest customer
-            Clients.Client(toConnectionId).broadcastMessage(name, message);
+            Clients.Client(toConnectionId).broadcastMessage(customer.Id, customer.Name, message);
 
             // save message to conversation
-            var currentCustomer = GetCurrentCustomerByConnectionId(Context.ConnectionId);
-            SaveMessageToConversation(currentCustomer.Id, to, message);
+            SaveMessageToConversation(customer.Id, toCustomerId, message);
+        }
+
+        private Customer GetCustomerById(long customerId)
+        {
+            using(var db = new ChatSignalrContext())
+            {
+                return db.Customers.FirstOrDefault(x => x.Id == customerId);
+            }
         }
 
         private void SaveMessageToConversation(long customerId, long toCustomerId, string message)
@@ -52,7 +62,7 @@ namespace Website.ChatSignalR.Hubs
                 // get old conversation between 2 customers
                 var conv = db.Conversations
                     .Include(i => i.Customers)
-                    .FirstOrDefault(x => x.Customers.Count == 2 && x.Customers.Any(n => ids.Contains(n.Id)));
+                    .FirstOrDefault(x => x.Customers.Count == 2 && x.Customers.All(n => ids.Contains(n.Id)));
 
                 var newMsg = new Message
                 {
@@ -122,9 +132,6 @@ namespace Website.ChatSignalR.Hubs
                 || !CheckExisted(customerId))    // neu customer ko ton tai trong db
                 throw new Exception("Need to check valid cookie " + AppConstants.COOKIE_CHAT_CUSTOMERID + " in action ChatRoom/SignalRChat");
 
-            // #1.1 set global currentCustomerId
-            _currentCustomerId = customerId;
-
             using (var db = new ChatSignalrContext())
             {
                 var customer = db.Customers
@@ -152,15 +159,23 @@ namespace Website.ChatSignalR.Hubs
 
                 // #4 update onlines list to dict
                 if (dictOnlineCustomers.ContainsKey(customer.Id))
-                    throw new Exception("This customer - " + customer.Id + " is online");
-                if (!dictOnlineCustomers.TryAdd(customer.Id, customer))
-                    throw new Exception("Add this customer " + customer.Id + " to dictOnlineCustomers is failed!");
+                {
+                    /// truong hợp mở tab mới trong khi tab cũ chưa ngắt kết nối
+                    /// tạm thời ko xét trường hợp này
+                    // throw new Exception("This customer - " + customer.Id + " is online");
+                }
+                else
+                {
+                    if (!dictOnlineCustomers.TryAdd(customer.Id, customer))
+                        throw new Exception("Add this customer " + customer.Id + " to dictOnlineCustomers is failed!");
+                }
 
                 // #5 notify (update) onlines list to all current customers
                 foreach (KeyValuePair<long, Customer> entry in dictOnlineCustomers)
                 {
                     // load onlines in caller
-                    Clients.Caller.online(entry.Key, entry.Value.Name);
+                    string lastMessage = "";
+                    Clients.Caller.online(entry.Key, entry.Value.Name, lastMessage);
                     //Clients.All.online(entry.Key, entry.Value.Name);
                 }
 
@@ -179,7 +194,7 @@ namespace Website.ChatSignalR.Hubs
             }
         }
 
-
+        // Can test lai ve ham disconnect nay
         public override Task OnDisconnected(bool stopCalled)
         {
             //var name = dic.FirstOrDefault(x => x.Value == Context.ConnectionId.ToString());
@@ -188,6 +203,9 @@ namespace Website.ChatSignalR.Hubs
             if (!dictOnlineCustomers.TryRemove(item.Key, out s))
                 throw new Exception("Customer " + item.Key + " remove failed!");
 
+            // notify caller about the disconnection if current chat view is still existing.
+            Clients.Caller.selfDisconnected(item.Key, item.Value.Name);
+            // notify all about the disconnection
             return Clients.All.disconnected(item.Key, item.Value.Name);
             //base.OnDisconnected(stopCalled: true);
         }

@@ -9,24 +9,13 @@
     <div class="panel panel-default">
         <div class="panel-heading">SignalR Chat</div>
         <div class="panel-body">
-            <div class="col-md-9">
-                <input type="hidden" id="nickname" />
-                <div id="chatlog"></div>
-
-                <div id="chatarea">
-                    <div class="messagelog">
-                        <textarea spellcheck="true" id="message" class="messagebox form-control"></textarea>
-                    </div>
-                    <br />
-                    <div class="actionpane">
-                        <input type="button" id="btnsend" value="Send" class="btn btn-success" />
-                    </div>
-                </div>
+            <div class="col-md-9 col-sm-9 col-xs-8">
+                <div id="chatformbox" style="min-height: 100px">Please select user to begin chat</div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-3 col-sm-9 col-xs-4">
                 <table class="table table-bordered table-striped" id="onlineusers">
                     <tr>
-                        <td><b>Online Users</b></td>
+                        <th><b>ONLINE USERS</b></th>
                     </tr>
                 </table>
 
@@ -35,14 +24,15 @@
     </div>
 </div>
 
-
 @section scripts{
     @Scripts.Render("~/Scripts/jquery-ui-1.12.1.min.js")
     @Scripts.Render("~/Scripts/jquery.signalR-2.2.1.min.js")
     @Scripts.Render("/signalr/hubs")
     <script>
 
-        var _chatCustomerId = "@cookieCustomerId";
+        var _chatCustomerId = "@cookieCustomerId",
+            _selectedCustomerId = null,
+            chat = null;
 
         $(function () {
             //showModalUserNickName();
@@ -50,27 +40,35 @@
         });
 
         var domMethods = {
-            appendNewOnlineUser: function (id, name, self) {
+            appendNewOnlineUser: function (id, name, lastMessage, self) {
                 var html = '';
                 if (self === true) {
-                    html = '<tr>' +
+                    html = '<tr data-id=' + id + '>' +
                                 '<td>' + '<span class="border" style="color:green">You: ' + name + '</span>' + '</td>' +
+                                '<p>' + lastMessage + '</p>' +
                             '</tr>';
                 } else {
-                    html = '<tr>' +
+                    html = '<tr data-id=' + id + '>' +
                                 '<td>' + '<a href="#" class="border" onclick="domMethods.loadConversationMessages(' + id + ')">' + name + '</a>' + '</td>' +
+                                '<p>' + lastMessage + '</p>' +
                             '</tr>';
                 }
 
+                if ($('#onlineusers').find('tr[data-id=' + id + ']').length > 0) {
+                    alert('da ton tai user nay! tai sao???');
+                    debugger;
+                }
+
                 $('#onlineusers').append(html);
+            },
+            removeOnlineUser: function (id, name) {
+                //$('#onlineusers div').remove(":contains('" + name + "')");
+                $('#onlineusers tr[data-id=' + id + ']').remove();
             },
             //appendSelfOnlineUser: function (id, name) {
             //},
             appendNewMessageToChatLog: function (name, message) {
                 $('#chatlog').append('<div class="border"><span style="color:orange">' + name + '</span>: ' + message + '</div>');
-            },
-            removeOnlineUser: function () {
-                $('#onlineusers div').remove(":contains('" + name + "')");
             },
             notifyNewOtherJoining: function (id, name) {
                 $('#chatlog').append('<div ><i>' + name + ' joins the conversation</i></div>');
@@ -78,27 +76,47 @@
             notifyUserLeaving: function () {
                 $('#chatlog').append('<div ><i>' + name + ' leaves the conversation</i></div>');
             },
-            loadConversationMessages: function (toId) {
-                debugger;
+            loadConversationMessages: function (toId, p) {
+                _selectedCustomerId = toId;
                 $.ajax({
-                    url: '/chatroom/LoadConversationMessages',
+                    //url: '/chatroom/LoadConversationMessages',
+                    url: '/chatroom/ChatFormBox',
                     data: {
                         customerId: _chatCustomerId,
                         toCustomerId: toId,
+                        p: p,
+                    },
+                    beforeSend: function () {
+                        $('#chatformbox').html('<img src="https://s-media-cache-ak0.pinimg.com/originals/01/8d/2a/018d2ac351d2f2de9b77e870f29894e1.gif" alt="Alternate Text" style="width: 100%" />');
                     },
                     success: function (data) {
-                        data.forEach(function (item) {
-                            domMethods.appendNewMessageToChatLog(item.name, item.message);
+                        $('#chatformbox').html(data);
+
+                        // remove badge
+                        $('#onlineusers tr[data-id=' + toId + ']')
+                            .find('.badge')
+                            .remove();
+                        debugger;
+
+                        $('#btnsend').click(function () {
+                            chat.server.sendToSpecific($('#message').val(), _selectedCustomerId);
+                            // Clear text box and reset focus for next comment.
+                            $('#message').val('').focus();
                         });
 
-                        $('#chatlog').html(data);
+                        // register event load more messages
+                        $('a.btn_loadmore').click(function (e) {
+                            e.preventDefault();
+                            var p = $(this).data('next-page');
+                            domMethods.loadConversationMessages(toId, p);
+                        });
                     }
                 });
             }
         }
 
         function startChatHub() {
-            var chat = $.connection.chatHub;
+            chat = $.connection.chatHub;
 
             // Get the user name.
             $('#nickname').val($('#nick').val());
@@ -111,31 +129,42 @@
                 //chat.server.notify($('#nickname').val(), $.connection.hub.id);
             };
 
-            chat.client.online = function (id, name) {
+            chat.client.online = function (id, name, lastMessage) {
                 // Update list of users
                 if (id == _chatCustomerId) // (name == $('#nickname').val())
-                    domMethods.appendNewOnlineUser(id, name, true);
+                    domMethods.appendNewOnlineUser(id, name, '', true);
                 else {
-                    domMethods.appendNewOnlineUser(id, name);
+                    domMethods.appendNewOnlineUser(id, name, lastMessage);
                 }
             };
 
             chat.client.enters = function (id, name) {
-                debugger;
                 domMethods.notifyNewOtherJoining(id, name);
                 //$("#users").append('<option value="' + id + '">' + name + '</option>');
                 domMethods.appendNewOnlineUser(id, name);
             };
             // Create a function that the hub can call to broadcast chat messages.
-            chat.client.broadcastMessage = function (name, message) {
-                debugger;
-                //Interpret smileys
-                message = message.replace(":)", "<img src=\"/images/smile.gif\" class=\"smileys\" />");
-                message = message.replace(":D", "<img src=\"/images/laugh.gif\" class=\"smileys\" />");
-                message = message.replace(":o", "<img src=\"/images/cool.gif\" class=\"smileys\" />");
+            chat.client.broadcastMessage = function (fromId, fromName, message) {
 
-                //display the message
-                domMethods.appendNewMessageToChatLog(name, message);
+                if ($('#chatlog').length > 0) {
+                    //Interpret smileys
+                    message = message.replace(":)", "<img src=\"/images/smile.gif\" class=\"smileys\" />");
+                    message = message.replace(":D", "<img src=\"/images/laugh.gif\" class=\"smileys\" />");
+                    message = message.replace(":o", "<img src=\"/images/cool.gif\" class=\"smileys\" />");
+
+                    //display the message
+                    domMethods.appendNewMessageToChatLog(fromName, message);
+                } else {
+                    var $ct_badge = $('#onlineusers tr[data-id=' + fromId + ']').find('.border');
+                    var $badge = $ct_badge.find('.badge');
+
+                    if ($badge.length > 0) {
+                        var curVal = parseInt($badge.text());
+                        $badge.text(++curVal);
+                    } else {
+                        $ct_badge.append('<i class="badge badge-danger">' + 1 + '</i>');
+                    }
+                }
             };
 
             chat.client.disconnected = function (id, name) {
@@ -145,23 +174,30 @@
                 //$("#users option").remove(":contains('" + name + "')");
             }
 
+            chat.client.selfDisconnected = function (id, name) {
+                alert('This connection is disconnected, please reload page to continue');
+            }
+
             // Start the connection.
             $.connection.hub.start().done(function () {
                 //Calls the notify method of the server
                 //chat.server.notify($('#nickname').val(), $.connection.hub.id);
                 //chat.server.notify();
 
-                $('#btnsend').click(function () {
-                    if ($("#users").val() == "All") {
-                        // Call the Send method on the hub.
-                        chat.server.send($('#nickname').val(), $('#message').val());
-                    }
-                    else {
-                        chat.server.sendToSpecific($('#nickname').val(), $('#message').val(), $("#users").val());
-                    }
-                    // Clear text box and reset focus for next comment.
-                    $('#message').val('').focus();
-                });
+                //$('#btnsend').click(function () {
+                //    //if ($("#users").val() == "All") {
+                //    //    // Call the Send method on the hub.
+                //    //    chat.server.send($('#nickname').val(), $('#message').val());
+                //    //}
+                //    //else {
+                //    //    chat.server.sendToSpecific($('#nickname').val(), $('#message').val(), $("#users").val());
+                //    //}
+
+                //    chat.server.sendToSpecific($('#message').val(), _selectedCustomerId);
+
+                //    // Clear text box and reset focus for next comment.
+                //    $('#message').val('').focus();
+                //});
 
             });
         }

@@ -41,5 +41,6 @@ namespace Website.ChatSignalR.Models
         public string Content { get; set; }
         public DateTime DateCreated { get; set; }
         public virtual Customer Customer { get; set; }
+        public virtual Conversation Conversation { get; set; }
     }
 }

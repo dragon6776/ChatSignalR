@@ -1,0 +1,27 @@
+﻿@model Website.ChatSignalR.Models.Conversation
+@{
+    Layout = null;
+}
+
+<div id="chatlog" class="form-group">
+    @if (ViewBag.NextPage != null)
+    {
+        <p>
+            <a class="btn_loadmore" href="#" data-next-page="@ViewBag.NextPage">Show older messages</a>
+        </p>
+    }
+    @foreach (var item in Model.Messages)
+    {
+        <div class="border"><span style="color:orange">@item.Customer.Name</span>: @item.Content</div>
+    }
+</div>
+
+<div id="chatarea" class="form-group">
+    <div class="messagelog">
+        <textarea spellcheck="true" id="message" class="messagebox form-control"></textarea>
+    </div>
+    <br />
+    <div class="actionpane">
+        <input type="button" id="btnsend" value="Send" class="btn btn-success" />
+    </div>
+</div>
