@@ -11,7 +11,8 @@ namespace Website.ChatSignalR.Models
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Conversation> Conversations { get; set; }
 
-        public System.Data.Entity.DbSet<Website.ChatSignalR.Models.Message> Messages { get; set; }
+        public DbSet<Message> Messages { get; set; }
+        //public DbSet<Connection> Connections { get; set; }
 
         protected override void OnModelCreating(DbModelBuilder modelBuilder)
         {

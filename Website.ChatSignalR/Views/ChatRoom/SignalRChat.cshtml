@@ -1,7 +1,7 @@
 ﻿@using Website.ChatSignalR.Models
 @{
     ViewBag.Title = "SignalRChat";
-    var cookieCustomerId = System.Web.HttpContext.Current.Request.Cookies.Get(AppConstants.COOKIE_CHAT_CUSTOMERID)?.Value;  // Response.Cookies.Get(AppConstants.COOKIE_CHAT_CUSTOMERID)?.Value;
+    var cookieCustomerId = System.Web.HttpContext.Current.Request.Cookies.Get(AppConstants.COOKIE_CHAT_CUSTOMERID)?.Value;  // Response.Cookies.Get(AppConstants.COOKIE_chatHub_CUSTOMERID)?.Value;
 }
 
 <h2>SignalRChat - <span id="ccc">'@cookieCustomerId'</span></h2>
@@ -30,9 +30,9 @@
     @Scripts.Render("/signalr/hubs")
     <script>
 
-        var _chatCustomerId = "@cookieCustomerId",
+        var _chatHubCustomerId = "@cookieCustomerId",
             _selectedCustomerId = null,
-            chat = null;
+            _chatHub = null;
 
         $(function () {
             //showModalUserNickName();
@@ -55,11 +55,10 @@
                 }
 
                 if ($('#onlineusers').find('tr[data-id=' + id + ']').length > 0) {
-                    alert('da ton tai user nay! tai sao???');
-                    debugger;
+                    console.log('multi connections in multi tabs');
+                } else {
+                    $('#onlineusers').append(html);
                 }
-
-                $('#onlineusers').append(html);
             },
             removeOnlineUser: function (id, name) {
                 //$('#onlineusers div').remove(":contains('" + name + "')");
@@ -82,7 +81,7 @@
                     //url: '/chatroom/LoadConversationMessages',
                     url: '/chatroom/ChatFormBox',
                     data: {
-                        customerId: _chatCustomerId,
+                        customerId: _chatHubCustomerId,
                         toCustomerId: toId,
                         p: p,
                     },
@@ -99,7 +98,7 @@
                         debugger;
 
                         $('#btnsend').click(function () {
-                            chat.server.sendToSpecific($('#message').val(), _selectedCustomerId);
+                            _chatHub.server.sendToSpecific($('#message').val(), _selectedCustomerId);
                             // Clear text box and reset focus for next comment.
                             $('#message').val('').focus();
                         });
@@ -116,35 +115,35 @@
         }
 
         function startChatHub() {
-            chat = $.connection.chatHub;
+            _chatHub = $.connection.chatHub;
 
             // Get the user name.
             $('#nickname').val($('#nick').val());
-            chat.client.differentName = function (name) {
+            _chatHub.client.differentName = function (name) {
                 debugger;
                 //showModalUserNickName();
                 return false;
                 // Prompts for different user name
                 $('#nickname').val($('#nick').val());
-                //chat.server.notify($('#nickname').val(), $.connection.hub.id);
+                //_chatHub.server.notify($('#nickname').val(), $.connection.hub.id);
             };
 
-            chat.client.online = function (id, name, lastMessage) {
+            _chatHub.client.online = function (id, name, lastMessage) {
                 // Update list of users
-                if (id == _chatCustomerId) // (name == $('#nickname').val())
+                if (id == _chatHubCustomerId) // (name == $('#nickname').val())
                     domMethods.appendNewOnlineUser(id, name, '', true);
                 else {
                     domMethods.appendNewOnlineUser(id, name, lastMessage);
                 }
             };
 
-            chat.client.enters = function (id, name) {
+            _chatHub.client.enters = function (id, name) {
                 domMethods.notifyNewOtherJoining(id, name);
                 //$("#users").append('<option value="' + id + '">' + name + '</option>');
                 domMethods.appendNewOnlineUser(id, name);
             };
             // Create a function that the hub can call to broadcast chat messages.
-            chat.client.broadcastMessage = function (fromId, fromName, message) {
+            _chatHub.client.broadcastMessage = function (fromId, fromName, message) {
 
                 if ($('#chatlog').length > 0) {
                     //Interpret smileys
@@ -167,33 +166,37 @@
                 }
             };
 
-            chat.client.disconnected = function (id, name) {
+            _chatHub.client.disconnected = function (id, name) {
                 //Calls when someone leaves the page
                 domMethods.notifyUserLeaving(id, name);
                 domMethods.removeOnlineUser(id, name);
                 //$("#users option").remove(":contains('" + name + "')");
             }
 
-            chat.client.selfDisconnected = function (id, name) {
+            _chatHub.client.selfDisconnected = function (id, name) {
                 alert('This connection is disconnected, please reload page to continue');
+            }
+
+            _chatHub.client.showErrorMessage = function (errMsg) {
+                alert(errMsg);
             }
 
             // Start the connection.
             $.connection.hub.start().done(function () {
                 //Calls the notify method of the server
-                //chat.server.notify($('#nickname').val(), $.connection.hub.id);
-                //chat.server.notify();
+                //_chatHub.server.notify($('#nickname').val(), $.connection.hub.id);
+                //_chatHub.server.notify();
 
                 //$('#btnsend').click(function () {
                 //    //if ($("#users").val() == "All") {
                 //    //    // Call the Send method on the hub.
-                //    //    chat.server.send($('#nickname').val(), $('#message').val());
+                //    //    _chatHub.server.send($('#nickname').val(), $('#message').val());
                 //    //}
                 //    //else {
-                //    //    chat.server.sendToSpecific($('#nickname').val(), $('#message').val(), $("#users").val());
+                //    //    _chatHub.server.sendToSpecific($('#nickname').val(), $('#message').val(), $("#users").val());
                 //    //}
 
-                //    chat.server.sendToSpecific($('#message').val(), _selectedCustomerId);
+                //    _chatHub.server.sendToSpecific($('#message').val(), _selectedCustomerId);
 
                 //    // Clear text box and reset focus for next comment.
                 //    $('#message').val('').focus();

@@ -13,44 +13,14 @@ namespace Website.ChatSignalR.Hubs
 {
     public class ChatHub : Hub
     {
-        static ConcurrentDictionary<string, string> dic = new ConcurrentDictionary<string, string>();
 
-        static ConcurrentDictionary<long, Customer> dictOnlineCustomers = new ConcurrentDictionary<long, Customer>();
-        long _currentCustomerId;
+        #region Utilities
 
-        public void Hello()
+        private bool CheckExisted(int customerId)
         {
-            Clients.All.hello();
-        }
-
-        //public void Send(string name, string message)
-        //{
-        //    Clients.All.broadcastMessage(name, message);
-        //}
-
-        public void SendToSpecific(string message, long toCustomerId)
-        {
-            // get current customer by connection
-            var customer = GetCurrentCustomerByConnectionId(Context.ConnectionId);
-
-            //string toConnectionId = dic[to];
-            string toConnectionId = GetActivedConnectionIdByCustomerId(toCustomerId);
-
-            // broadcast messae to caller
-            Clients.Caller.broadcastMessage(customer.Id, customer.Name, message);
-
-            // broadcast message to dest customer
-            Clients.Client(toConnectionId).broadcastMessage(customer.Id, customer.Name, message);
-
-            // save message to conversation
-            SaveMessageToConversation(customer.Id, toCustomerId, message);
-        }
-
-        private Customer GetCustomerById(long customerId)
-        {
-            using(var db = new ChatSignalrContext())
+            using (var db = new ChatSignalrContext())
             {
-                return db.Customers.FirstOrDefault(x => x.Id == customerId);
+                return db.Customers.Any(n => n.Id == customerId);
             }
         }
 
@@ -89,125 +59,169 @@ namespace Website.ChatSignalR.Hubs
             }
         }
 
-        private string GetActivedConnectionIdByCustomerId(long to)
-        {
-            return dictOnlineCustomers[to]
-                .Connections
-                .First(x => x.Connected)
-                .ConnectionId;
-        }
 
-        private Customer GetCurrentCustomerByConnectionId(string connectionId)
-        {
-            return dictOnlineCustomers
-                .FirstOrDefault(n => n.Value.Connections.Any(n2 => n2.ConnectionId == connectionId))
-                .Value;
-        }
+        #endregion
 
-        //public void Notify() //  public void Notify(string name, string id)
-        //{
-        //    var customerId = GetCookieCustomerId();
-        //    if (dictOnlineCustomers.ContainsKey(customerId))
-        //    {
-        //        Clients.Caller.differentName();
-        //    }
-        //    else
-        //    {
-        //        dictOnlineCustomers.TryAdd(customerId, id);
-        //        foreach (KeyValuePair<String, String> entry in dic)
-        //        {
-        //            Clients.Caller.online(entry.Key);
-        //        }
-        //        Clients.Others.enters(name);
-        //    }
-        //}
-
-        public override Task OnConnected()
+        public void SendToSpecific(string message, long toUserId)
         {
-            // #1 check valid customerid (ChatRoom/SignalrChat is already checked & prepared)
-            Cookie s;
-            int customerId = 0;
-            if (!Context.Request.Cookies.TryGetValue(AppConstants.COOKIE_CHAT_CUSTOMERID, out s) // neu ko ton tai cookie
-                || !int.TryParse(s.Value, out customerId)   // neu ko parse dc customerId
-                || !CheckExisted(customerId))    // neu customer ko ton tai trong db
-                throw new Exception("Need to check valid cookie " + AppConstants.COOKIE_CHAT_CUSTOMERID + " in action ChatRoom/SignalRChat");
+            var currentUserId = GetCurrentContextUserId();
 
             using (var db = new ChatSignalrContext())
             {
-                var customer = db.Customers
-                    .Include(i => i.Connections)
-                    .FirstOrDefault(x => x.Id == customerId);
-
-                // #2 update old customer connections, set connected = false
-                foreach (var itm in customer.Connections.ToList())
+                // current user id from cookie phai luon co trong db, buoc nay da duoc kiem tra o ChatRoomController
+                if (currentUserId == 0 || !db.Customers.Any(n => n.Id == currentUserId))
                 {
-                    itm.Connected = false;
-                    db.Entry(itm).State = EntityState.Modified;
-                    db.SaveChanges();
+                    Clients.Caller.showErrorMessage("Could not find current user (" + toUserId + ") or CurrentUserId is empty, please reload page again to get new UserId");
+                    return;
                 }
 
-                // #3 update new customer connection to current customer
-                customer.Connections.Add(new Connection
+                var toUser = db.Customers
+                    .Include(i => i.Connections)
+                    .FirstOrDefault(x => x.Id == toUserId);
+
+                var activeConnIds = toUser.Connections
+                    .Where(x => x.Connected)
+                    .Select(s => s.ConnectionId)
+                    .ToList();
+
+                if (toUser == null)
+                {
+                    Clients.Caller.showErrorMessage("Could not find dest user (" + toUserId + "), but this user will be received this message when this user is online");
+                }
+                else
+                {
+                    if (activeConnIds.Count == 0)
+                    {
+                        // thong bao cho nguoi gui // current caller connection only.
+                        Clients.Caller.showErrorMessage("The user is no longer connected.");
+                    }
+                    else
+                    {
+                        // broadcast messae to caller
+                        var caller = db.Customers
+                            .Include(i => i.Connections)
+                            .FirstOrDefault(x => x.Id == currentUserId);
+                        var activeCallerConnIds = caller.Connections.Where(x => x.Connected)
+                            .Select(s=>s.ConnectionId)
+                            .ToList();
+
+                        foreach (var connId in activeCallerConnIds)
+                            Clients.Client(connId).broadcastMessage(currentUserId, toUser.Name, message); // Clients.Caller
+
+                        // Gửi tin nhắn cho tất các các kết nối hiện tại của user can gui // all user connections
+                        foreach(var connId in activeConnIds)
+                            Clients.Client(connId).broadcastMessage(currentUserId, toUser.Name, message);
+                    }
+
+                    // save message to conversation
+                    SaveMessageToConversation(currentUserId, toUserId, message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Get current userid via from cookie data
+        /// </summary>
+        /// <returns></returns>
+        private long GetCurrentContextUserId()
+        {
+            Cookie s;
+            int customerId = 0;
+
+            if (Context.Request.Cookies.TryGetValue(AppConstants.COOKIE_CHAT_CUSTOMERID, out s))
+                int.TryParse(s.Value, out customerId);
+
+            return customerId;
+        }
+
+        public override Task OnConnected()
+        {
+            var currentUserId = GetCurrentContextUserId();
+
+            using (var db = new ChatSignalrContext())
+            {
+                // #1 - Check Valid: current user id from cookie phai luon co trong db, buoc nay da duoc kiem tra o ChatRoomController
+                if (currentUserId == 0 || !db.Customers.Any(n => n.Id == currentUserId))
+                {
+                    // Nếu ko tìm thấy user , nhưng ko chắc chắn có set đc cookie ở trong Hub này không 
+                    // nên tạm thời xử lý trường hợp này ở ChatRoomController.
+                    Clients.Caller.showErrorMessage("Could not find current user (" + currentUserId + ") or CurrentUserId is empty, please reload page again to get new UserId");
+                    return base.OnConnected();
+                }
+
+                // #2 - Add new user connection
+                var user = db.Customers
+                    .Include(i => i.Connections)
+                    .FirstOrDefault(x => x.Id == currentUserId);
+                user.Connections.Add(new Connection
                 {
                     Connected = true,
                     UserAgent = Context.Request.Headers["User-Agent"],
                     ConnectionId = Context.ConnectionId
                 });
-
-                db.Entry(customer).State = EntityState.Modified;
+                db.Entry(user).State = EntityState.Modified;
                 db.SaveChanges();
 
-                // #4 update onlines list to dict
-                if (dictOnlineCustomers.ContainsKey(customer.Id))
-                {
-                    /// truong hợp mở tab mới trong khi tab cũ chưa ngắt kết nối
-                    /// tạm thời ko xét trường hợp này
-                    // throw new Exception("This customer - " + customer.Id + " is online");
-                }
-                else
-                {
-                    if (!dictOnlineCustomers.TryAdd(customer.Id, customer))
-                        throw new Exception("Add this customer " + customer.Id + " to dictOnlineCustomers is failed!");
-                }
+                // #3 show list all online users to the caller
+                var onlineUsers = db.Customers
+                    .Include(i => i.Connections)
+                    .Where(x => x.Connections.Any(n => n.Connected));
 
-                // #5 notify (update) onlines list to all current customers
-                foreach (KeyValuePair<long, Customer> entry in dictOnlineCustomers)
+                foreach (var item in onlineUsers) // (KeyValuePair<long, Customer> entry in dictOnlineCustomers)
                 {
                     // load onlines in caller
-                    string lastMessage = "";
-                    Clients.Caller.online(entry.Key, entry.Value.Name, lastMessage);
-                    //Clients.All.online(entry.Key, entry.Value.Name);
+                    Clients.Caller.online(item.Id, item.Name);
                 }
 
-                // notify other this customer have enter.
-                Clients.Others.enters(customer.Id, customer.Name);
+                // #4 notify this user have entered to the others.
+                Clients.Others.enters(user.Id, user.Name);
             }
 
             return base.OnConnected();
         }
 
-        private bool CheckExisted(int customerId)
+        private void TestDataDemo()
         {
             using (var db = new ChatSignalrContext())
             {
-                return db.Customers.Any(n => n.Id == customerId);
+                var allConn = db.Customers
+                    .Include(i => i.Connections)
+                    .SelectMany(s => s.Connections)
+                    .Where(x => x.Connected)
+                    .ToList();
+
+                foreach (var item in allConn)
+                {
+                    item.Connected = false;
+                    db.Entry(item).State = EntityState.Modified;
+                    db.SaveChanges();
+                }
             }
         }
 
-        // Can test lai ve ham disconnect nay
         public override Task OnDisconnected(bool stopCalled)
         {
-            //var name = dic.FirstOrDefault(x => x.Value == Context.ConnectionId.ToString());
-            var item = dictOnlineCustomers.FirstOrDefault(x => x.Value.Connections.Any(n => n.ConnectionId == Context.ConnectionId));
-            Customer s;
-            if (!dictOnlineCustomers.TryRemove(item.Key, out s))
-                throw new Exception("Customer " + item.Key + " remove failed!");
+            using (var db = new ChatSignalrContext())
+            {
+                var user = db.Customers
+                    .Include(i => i.Connections)
+                    .FirstOrDefault(x => x.Connections.Any(n => n.ConnectionId == Context.ConnectionId));
 
-            // notify caller about the disconnection if current chat view is still existing.
-            Clients.Caller.selfDisconnected(item.Key, item.Value.Name);
-            // notify all about the disconnection
-            return Clients.All.disconnected(item.Key, item.Value.Name);
-            //base.OnDisconnected(stopCalled: true);
+                var conn = user.Connections
+                    .FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
+
+                conn.Connected = false;
+                db.Entry(conn).State = EntityState.Modified;
+                db.SaveChanges();
+
+                if (!user.Connections.Any(n => n.Connected))
+                {
+                    // If all user connections is disconnected, notify to all about this disconnection of the user.
+                    Clients.All.disconnected(user.Id, user.Name);
+                }
+            }
+
+            return base.OnDisconnected(stopCalled);
         }
     }
 }
