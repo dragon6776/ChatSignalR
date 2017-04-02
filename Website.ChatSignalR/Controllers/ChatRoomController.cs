@@ -12,10 +12,27 @@ namespace Website.ChatSignalR.Controllers
     {
         private ChatSignalrContext db = new ChatSignalrContext();
 
-        private bool CheckUserExisted(int customerId)
+        #region UTILITIES
+
+        private string GetBasicCookie(string key)
         {
-                return db.Customers.Any(n => n.Id == customerId);
+            //key = RemoveSpecialChars(HttpContext.Current.Request.Url.Host) + "_" + key;
+            HttpCookie myCookie = System.Web.HttpContext.Current.Request.Cookies[key];
+            if (myCookie != null)
+                return myCookie.Value;
+
+            return null;
         }
+
+        private void SetBasicCookie(string key, string value)
+        {
+            var myCookie = System.Web.HttpContext.Current.Request.Cookies[AppConstants.COOKIE_CHAT_CUSTOMERID] ?? new HttpCookie(AppConstants.COOKIE_CHAT_CUSTOMERID);
+            myCookie.Value = value;
+            myCookie.Expires = DateTime.Now.AddMonths(1);
+            System.Web.HttpContext.Current.Response.Cookies.Add(myCookie);
+        }
+
+        #endregion
 
         // GET: ChatRoom
         public ActionResult Index()
@@ -56,23 +73,7 @@ namespace Website.ChatSignalR.Controllers
             return View();
         }
 
-        private string GetBasicCookie(string key)
-        {
-            //key = RemoveSpecialChars(HttpContext.Current.Request.Url.Host) + "_" + key;
-            HttpCookie myCookie = System.Web.HttpContext.Current.Request.Cookies[key];
-            if (myCookie != null)
-                return myCookie.Value;
 
-            return null;
-        }
-
-        private void SetBasicCookie(string key, string value)
-        {
-            var myCookie = System.Web.HttpContext.Current.Request.Cookies[AppConstants.COOKIE_CHAT_CUSTOMERID] ?? new HttpCookie(AppConstants.COOKIE_CHAT_CUSTOMERID);
-            myCookie.Value = value;
-            myCookie.Expires = DateTime.Now.AddMonths(1);
-            System.Web.HttpContext.Current.Response.Cookies.Add(myCookie);
-        }
 
         public ActionResult LoadConversationMessages(long customerId, long toCustomerId)
         {
